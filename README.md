@@ -37,10 +37,6 @@
 - **Chrome / Edge:** اختيار المجلد المباشر مع كل المميزات.
 - **Safari / Firefox:** يعمل بطريقة اختيار المجلد البديلة.
 
-## النشر على GitHub Pages
-1. ارفع كل ملفات المستودع إلى فرع `main`.
-2. من **Settings ← Pages** اختر *Deploy from a branch* ثم `main` و `/ (root)`.
-3. بعد دقيقة يظهر الرابط `https://USERNAME.github.io/REPO/`.
 
 ## هيكل المشروع
 ```
