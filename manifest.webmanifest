@@ -6,7 +6,8 @@
   "dir": "rtl",
   "start_url": "./",
   "scope": "./",
-  "display": "standalone",
+  "display": "minimal-ui",
+  "display_override": ["minimal-ui", "standalone", "browser"],
   "background_color": "#F5F7F5",
   "theme_color": "#0B6E4F",
   "icons": [
