@@ -26,8 +26,11 @@
     currentURL: null,
     queue: [], curPath: null, hist: [],
     favs: new Set((() => { try { return JSON.parse(store.get('quran_favs') || '[]'); } catch (e) { return []; } })()),
-    handle: null, metaCache: new Map(), sig: '', resumeAt: 0, sleepAt: 0, sleepEnd: false,
+    handle: null, metaCache: new Map(), sig: '', resumeAt: 0, sleepAt: 0, sleepEnd: false, ghost: null, ghostDismissed: false,
   };
+
+  let userVol = 1, fadeF = 1, fadeT = 0, fadeRes = null, pausing = false;
+  const STAR_SVG = '<svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="m12 2.8 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.6 6.2 20.7l1.1-6.5L2.6 9.6l6.5-.9z"/></svg>';
 
   const AUDIO_EXT = ['mp3','wav','ogg','m4a','aac','flac','opus','webm'];
   const ATHKAR_KW = ['أذكار','اذكار','ذكر','دعاء','أدعية','ادعية','تسبيح','استغفار','أسماء الله','اسماء الله'];
@@ -184,7 +187,7 @@
   const splash = $('splash');
   const tabs = $('tabs'), tabQuran = $('tabQuran'), tabAthkar = $('tabAthkar');
   const qCount = $('qCount'), aCount = $('aCount');
-  const tabFavs = $('tabFavs'), fCount = $('fCount'), resumeBtn = $('resumeBtn'), permBtn = $('permBtn');
+  const tabFavs = $('tabFavs'), fCount = $('fCount'), permBtn = $('permBtn');
   const speedBtn = $('speedBtn'), sleepBtn = $('sleepBtn'), favBtn = $('favBtn');
   const toolbar = $('toolbar'), search = $('search'), clearBtn = $('clearBtn');
   const empty = $('empty'), grid = $('grid'), noResults = $('noResults'), skel = $('skel');
@@ -491,7 +494,7 @@
       card.innerHTML = `${badgeHTML}<div class="card-body"><div class="card-title">${esc(cleanTitle(dn))}</div></div>`;
       const fb = document.createElement('button');
       const on = S.favs.has(f.path);
-      fb.className = 'fav' + (on ? ' on' : ''); fb.textContent = on ? '★' : '☆';
+      fb.className = 'fav' + (on ? ' on' : ''); fb.innerHTML = STAR_SVG;
       fb.setAttribute('aria-label', 'مفضلة'); fb.setAttribute('aria-pressed', on);
       fb.addEventListener('click', e => { e.stopPropagation(); toggleFav(f.path); });
       fb.addEventListener('keydown', e => e.stopPropagation());
@@ -507,7 +510,7 @@
       const none = currentList().length === 0;
       const fv = none && S.currentTab === 'favs';
       $('nrTitle').textContent = fv ? 'لا توجد مفضلة بعد' : none ? 'لا توجد ملفات في هذا القسم' : 'لا توجد نتائج';
-      $('nrText').textContent = fv ? 'اضغط ☆ على أي سورة لإضافتها هنا.' : none ? 'اختر مجلدًا يحتوي على ملفات هذا القسم.' : 'جرّب كلمات بحث أخرى.';
+      $('nrText').textContent = fv ? 'اضغط على النجمة في أي سورة لإضافتها هنا.' : none ? 'اختر مجلدًا يحتوي على ملفات هذا القسم.' : 'جرّب كلمات بحث أخرى.';
       grid.classList.add('hidden'); noResults.classList.remove('hidden');
     } else {
       noResults.classList.add('hidden'); grid.classList.remove('hidden');
@@ -515,7 +518,7 @@
   }
 
   // ═══ Playback ═══
-  async function playFile(f) {
+  async function playFile(f, noOpen) {
     if (!f.file) {
       if (!(await ensureFile(f))) return;
       f = S.all.find(x => x.path === f.path) || f;
@@ -524,12 +527,13 @@
     S.queue = (S.filtered.length > 0 ? S.filtered : currentList()).slice();
     S.hist = [];
     loadPlay(f);
-    openPlayer();
+    if (noOpen) mini.classList.add('visible'); else openPlayer();
   }
 
   function loadPlay(f) {
     if (!f) return;
-    S.curPath = f.path;
+    S.curPath = f.path; S.ghost = null; S.ghostDismissed = false; mini.classList.remove('ghost');
+    pausing = false; fadeF = 1; applyVol();
     if (S.currentURL) URL.revokeObjectURL(S.currentURL);
     const blob = f.file instanceof Blob ? f.file : new Blob([f.file]);
     S.currentURL = URL.createObjectURL(blob);
@@ -547,10 +551,12 @@
     setMedia(f, dn);
     syncFavUI();
 
+    if (document.visibilityState === 'visible') { fadeF = 0; applyVol(); }
     audio.play().then(() => {
+      fadeTo(1, 300);
       S.isPlaying = true;
       updatePlayUI();
-    }).catch(e => { if (e.name === 'AbortError') return; console.warn(e); S.isPlaying = false; updatePlayUI(); });
+    }).catch(e => { if (e.name === 'AbortError') return; fadeF = 1; applyVol(); console.warn(e); S.isPlaying = false; updatePlayUI(); });
 
     highlightCard(f.path);
   }
@@ -589,6 +595,7 @@
   }
 
   function closePlayer() {
+    closePops(); fadeF = 1; pausing = false; applyVol();
     player.classList.remove('open');
     mini.classList.remove('visible');
     document.body.style.overflow = '';
@@ -604,8 +611,9 @@
   }
 
   function togglePlay() {
-    if (!S.curPath) return;
-    if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+    if (!S.curPath) { if (S.ghost) resumeGhost(false); return; }
+    if (pausing) { pausing = false; fadeTo(1, 200); return; }   // ضغطة أثناء التلاشي = إلغاء الإيقاف
+    if (audio.paused) playSoft(); else pauseSoft();
   }
   playBtn.addEventListener('click', togglePlay);
   miniPlay.addEventListener('click', e => { e.stopPropagation(); togglePlay(); });
@@ -628,8 +636,8 @@
 
   prevBtn.addEventListener('click', playPrev);
   nextBtn.addEventListener('click', playNext);
-  miniPrev.addEventListener('click', e => { e.stopPropagation(); playPrev(); });
-  miniNext.addEventListener('click', e => { e.stopPropagation(); playNext(); });
+  miniPrev.addEventListener('click', e => { e.stopPropagation(); if (!S.ghost) playPrev(); });
+  miniNext.addEventListener('click', e => { e.stopPropagation(); if (!S.ghost) playNext(); });
 
   shuffleBtn.addEventListener('click', () => {
     S.isShuffle = !S.isShuffle;
@@ -644,7 +652,7 @@
   // ═══ Volume ═══
   volumeSlider.addEventListener('input', () => {
     const v = volumeSlider.value / 100;
-    audio.volume = v;
+    userVol = v; applyVol();
     volumeSlider.style.setProperty('--v', volumeSlider.value + '%');
     store.set('quran_vol', volumeSlider.value);
     S.isMuted = v === 0;
@@ -654,16 +662,16 @@
 
   muteBtn.addEventListener('click', () => {
     S.isMuted = !S.isMuted;
-    if (!S.isMuted && audio.volume === 0) { volumeSlider.value = 50; volumeSlider.dispatchEvent(new Event('input')); return; }
+    if (!S.isMuted && userVol === 0) { volumeSlider.value = 50; volumeSlider.dispatchEvent(new Event('input')); return; }
     audio.muted = S.isMuted;
     updateMuteIcon();
   });
 
   function updateMuteIcon() {
-    muteBtn.classList.toggle('muted', S.isMuted || audio.volume === 0);
-    if (S.isMuted || audio.volume === 0) {
+    muteBtn.classList.toggle('muted', S.isMuted || userVol === 0);
+    if (S.isMuted || userVol === 0) {
       muteIcon.innerHTML = '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/>';
-    } else if (audio.volume < 0.5) {
+    } else if (userVol < 0.5) {
       muteIcon.innerHTML = '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>';
     } else {
       muteIcon.innerHTML = '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>';
@@ -677,9 +685,10 @@
   // ═══ Player buttons ═══
   closeBtn.addEventListener('click', closePlayer);
   minimizeBtn.addEventListener('click', minimizePlayer);
-  miniClose.addEventListener('click', e => { e.stopPropagation(); closePlayer(); });
+  miniClose.addEventListener('click', e => { e.stopPropagation(); if (S.ghost) { S.ghost = null; S.ghostDismissed = true; mini.classList.remove('visible', 'ghost'); return; } closePlayer(); });
 
   mini.addEventListener('click', () => {
+    if (S.ghost) { resumeGhost(true); return; }
     player.classList.add('open');
     document.body.style.overflow = 'hidden';
     S.miniMode = false;
@@ -689,6 +698,7 @@
     if (e.target !== mini) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
+      if (S.ghost) { resumeGhost(true); return; }
       player.classList.add('open');
       document.body.style.overflow = 'hidden';
       S.miniMode = false;
@@ -837,6 +847,7 @@
   // ═══ المفضلة ═══
   function toggleFav(path) {
     S.favs.has(path) ? S.favs.delete(path) : S.favs.add(path);
+    if (path === S.curPath) pulse(favBtn);
     store.set('quran_favs', JSON.stringify([...S.favs]));
     fCount.textContent = S.all.filter(f => S.favs.has(f.path)).length;
     if (S.currentTab === 'favs') render(); else syncFavUI();
@@ -845,10 +856,10 @@
   function syncFavUI() {
     document.querySelectorAll('.card').forEach(c => {
       const on = S.favs.has(c.dataset.path), b = c.querySelector('.fav');
-      if (b) { b.classList.toggle('on', on); b.textContent = on ? '★' : '☆'; b.setAttribute('aria-pressed', on); }
+      if (b) { b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }
     });
     const on = S.favs.has(S.curPath);
-    favBtn.textContent = on ? '★ في المفضلة' : '☆ مفضلة'; favBtn.classList.toggle('on', on);
+    favBtn.classList.toggle('on', on); favBtn.setAttribute('aria-pressed', on); $('favLbl').textContent = on ? 'في المفضلة' : 'المفضلة';
   }
   favBtn.addEventListener('click', () => { if (S.curPath) toggleFav(S.curPath); });
 
@@ -859,38 +870,111 @@
     const now = Date.now();
     if (!force && now - lastSave < 4000) return;
     lastSave = now;
-    store.set('quran_last', JSON.stringify({ path: S.curPath, t: Math.floor(audio.currentTime) }));
+    store.set('quran_last', JSON.stringify({ path: S.curPath, t: Math.floor(audio.currentTime), d: Math.floor(audio.duration) }));
   }
+  // "تابع الاستماع": يظهر في المشغّل المصغّر (مثل تطبيقات الموسيقى)، ضغطة واحدة تكمل من حيث توقفت
   function showResume() {
     let l = null; try { l = JSON.parse(store.get('quran_last') || 'null'); } catch (e) {}
     const f = l && S.all.find(x => x.path === l.path);
-    if (!f || S.curPath) { resumeBtn.classList.add('hidden'); return; }
-    $('resumeName').textContent = cleanTitle(displayName(f)); $('resumeTime').textContent = fmtTime(l.t);
-    resumeBtn.classList.remove('hidden');
-    resumeBtn.onclick = () => { S.resumeAt = l.t; resumeBtn.classList.add('hidden'); playFile(f); };
+    if (!f || S.curPath || S.ghostDismissed) { if (!S.curPath && S.ghost && !f) { S.ghost = null; mini.classList.remove('visible', 'ghost'); } return; }
+    S.ghost = { f, t: l.t || 0 };
+    miniTitle.textContent = 'تابع: ' + cleanTitle(displayName(f));
+    miniFill.style.width = l.d ? Math.min(100, (l.t || 0) / l.d * 100) + '%' : '0%';
+    mini.classList.add('visible', 'ghost');
+  }
+  function resumeGhost(open) {
+    const g = S.ghost; if (!g) return;
+    S.resumeAt = g.t; playFile(g.f, !open);
   }
 
-  // ═══ سرعة التشغيل ═══
-  const RATES = [1, 1.25, 1.5, 1.75, 2, 0.75];
-  function setRate(r) { audio.defaultPlaybackRate = audio.playbackRate = r; speedBtn.textContent = r + '×'; store.set('quran_rate', r); }
-  speedBtn.addEventListener('click', () => setRate(RATES[(RATES.indexOf(audio.playbackRate) + 1) % RATES.length]));
-  { const r = parseFloat(store.get('quran_rate')); setRate(RATES.includes(r) ? r : 1); }
+  // ═══ تلاشي الصوت عند الإيقاف/التشغيل ═══
+  function applyVol() { audio.volume = Math.max(0, Math.min(1, userVol * fadeF)); }
+  function fadeTo(to, ms) {
+    return new Promise(res => {
+      clearInterval(fadeT); if (fadeRes) fadeRes();
+      fadeRes = res;
+      const from = fadeF, t0 = Date.now();
+      fadeT = setInterval(() => {
+        const k = Math.min(1, (Date.now() - t0) / ms);
+        fadeF = from + (to - from) * k; applyVol();
+        if (k >= 1) { clearInterval(fadeT); fadeRes = null; res(); }
+      }, 30);
+    });
+  }
+  async function pauseSoft(ms = 450) {
+    if (audio.paused) return;
+    if (document.visibilityState !== 'visible') { audio.pause(); return; }   // التبويب بالخلفية: المؤقتات تتباطأ
+    pausing = true;
+    await fadeTo(0, ms);
+    if (!pausing) return;
+    pausing = false; audio.pause(); fadeF = 1; applyVol();
+  }
+  function playSoft() {
+    if (document.visibilityState === 'visible') { fadeF = 0; applyVol(); }
+    audio.play().then(() => fadeTo(1, 350)).catch(() => { fadeF = 1; applyVol(); });
+  }
 
-  // ═══ مؤقت النوم: إيقاف / 15 / 30 / 60 دقيقة / نهاية السورة ═══
-  const SLEEP = [0, 15, 30, 60, -1]; let sleepI = 0;
+  // ═══ قوائم السرعة والمؤقت ═══
+  const RATES = [0.75, 1, 1.25, 1.5, 1.75, 2];
+  const SLEEP = [0, 15, 30, 60, -1];
+  function pulse(el) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+  function closePops() {
+    document.querySelectorAll('.pop.open').forEach(p => p.classList.remove('open'));
+    speedBtn.setAttribute('aria-expanded', 'false'); sleepBtn.setAttribute('aria-expanded', 'false');
+  }
+  function togglePop(btn, pop, items, current, pick) {
+    const was = pop.classList.contains('open');
+    closePops(); pulse(btn);
+    if (was) return;
+    pop.innerHTML = '';
+    items.forEach(it => {
+      const b = document.createElement('button');
+      b.className = 'pop-item'; b.setAttribute('role', 'menuitemradio'); b.setAttribute('aria-checked', it.v === current);
+      b.textContent = it.t;
+      b.addEventListener('click', e => { e.stopPropagation(); pick(it.v); closePops(); });
+      pop.appendChild(b);
+    });
+    pop.classList.add('open'); btn.setAttribute('aria-expanded', 'true');
+    const cur = pop.querySelector('[aria-checked="true"]'); if (cur) cur.focus({ preventScroll: true });
+  }
+  document.addEventListener('click', e => { if (!e.target.closest('.act-wrap')) closePops(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.querySelector('.pop.open')) { closePops(); e.stopImmediatePropagation(); }
+  }, true);
+
+  // السرعة: تبدأ دائمًا 1.0 ولا تُحفظ بين الجلسات
+  const rateTxt = r => Number.isInteger(r) ? r.toFixed(1) : String(r);
+  function setRate(r) {
+    audio.defaultPlaybackRate = audio.playbackRate = r;
+    $('speedVal').textContent = rateTxt(r) + '×'; speedBtn.classList.toggle('on', r !== 1);
+  }
+  speedBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    togglePop(speedBtn, $('speedPop'), RATES.map(r => ({ v: r, t: rateTxt(r) + '×' + (r === 1 ? ' (عادي)' : '') })), audio.playbackRate, setRate);
+  });
+  setRate(1);
+
+  // مؤقت النوم: بدون / 15 / 30 / 60 دقيقة / نهاية السورة (مع عدّاد تنازلي)
+  let sleepI = 0;
   function sleepUI() {
-    const m = SLEEP[sleepI];
-    sleepBtn.textContent = m === 0 ? '⏾ مؤقت' : m === -1 ? '⏾ آخر السورة' : '⏾ ' + m + ' د';
-    sleepBtn.classList.toggle('on', m !== 0);
+    const m = SLEEP[sleepI], b = $('sleepBadge');
+    sleepBtn.classList.toggle('on', m !== 0); b.classList.toggle('show', m !== 0);
+    if (m === -1) b.textContent = 'نهاية';
+    else if (m > 0) { const s = Math.max(0, Math.ceil((S.sleepAt - Date.now()) / 1000)); b.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+  }
+  function sleepSet(m) {
+    sleepI = SLEEP.indexOf(m); S.sleepAt = m > 0 ? Date.now() + m * 60000 : 0; S.sleepEnd = m === -1; sleepUI();
+    if (m !== 0) toast('سيتوقف التشغيل ' + (m === -1 ? 'عند نهاية السورة' : 'بعد ' + m + ' دقيقة'));
   }
   function sleepReset() { sleepI = 0; S.sleepAt = 0; S.sleepEnd = false; sleepUI(); }
-  sleepBtn.addEventListener('click', () => {
-    sleepI = (sleepI + 1) % SLEEP.length; const m = SLEEP[sleepI];
-    S.sleepAt = m > 0 ? Date.now() + m * 60000 : 0; S.sleepEnd = m === -1; sleepUI();
-  });
   function checkSleep() {
-    if (S.sleepAt && Date.now() >= S.sleepAt) { audio.pause(); sleepReset(); toast('تم الإيقاف (مؤقت النوم)'); }
+    if (!S.sleepAt) return;
+    if (Date.now() >= S.sleepAt) { sleepReset(); pauseSoft(2500); toast('تم الإيقاف (مؤقت النوم)'); } else sleepUI();
   }
+  sleepBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    togglePop(sleepBtn, $('sleepPop'), SLEEP.map(m => ({ v: m, t: m === 0 ? 'بدون مؤقت' : m === -1 ? 'نهاية السورة' : m + ' دقيقة' })), SLEEP[sleepI], sleepSet);
+  });
 
   // ═══ شاشة القفل: موضع التشغيل ═══
   function posState() {

@@ -95,7 +95,8 @@
       أذكار <span class="count" id="aCount">0</span>
     </button>
     <button class="t-tab" role="tab" aria-selected="false" data-tab="favs" id="tabFavs">
-      ★ مفضلة <span class="count" id="fCount">0</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 2.8 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.6 6.2 20.7l1.1-6.5L2.6 9.6l6.5-.9z"/></svg>
+      مفضلة <span class="count" id="fCount">0</span>
     </button>
   </div>
 </div>
@@ -129,7 +130,6 @@
       اختر مجلد الصوتيات
     </button>
   </div>
-  <button class="resume hidden" id="resumeBtn"><span>▶ تابع الاستماع</span><b id="resumeName"></b><small id="resumeTime"></small></button>
   <button class="resume perm hidden" id="permBtn">🔓 اضغط للسماح بقراءة المجلد وتحديث المكتبة</button>
   <div class="import hidden" id="imp" role="status"><div class="imp-top"><span id="impName">…</span><b id="impCount"></b></div><div class="imp-track"><i id="impFill"></i></div></div>
 
@@ -238,10 +238,21 @@
         </svg>
       </button>
     </div>
-    <div class="p-extra">
-      <button class="chip" id="speedBtn" aria-label="سرعة التشغيل">1×</button>
-      <button class="chip" id="sleepBtn" aria-label="مؤقت النوم">⏾ مؤقت</button>
-      <button class="chip" id="favBtn" aria-label="المفضلة">☆ مفضلة</button>
+    <div class="p-actions">
+      <div class="act-wrap">
+        <button class="act" id="speedBtn" aria-haspopup="menu" aria-expanded="false" aria-label="سرعة التشغيل"><b id="speedVal">1.0×</b></button>
+        <span class="act-lbl">السرعة</span>
+        <div class="pop" id="speedPop" role="menu" aria-label="سرعة التشغيل"></div>
+      </div>
+      <div class="act-wrap">
+        <button class="act" id="sleepBtn" aria-haspopup="menu" aria-expanded="false" aria-label="مؤقت النوم"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><i class="badge-t" id="sleepBadge"></i></button>
+        <span class="act-lbl">المؤقت</span>
+        <div class="pop" id="sleepPop" role="menu" aria-label="مؤقت النوم"></div>
+      </div>
+      <div class="act-wrap">
+        <button class="act" id="favBtn" aria-pressed="false" aria-label="المفضلة"><svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="m12 2.8 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.6 6.2 20.7l1.1-6.5L2.6 9.6l6.5-.9z"/></svg></button>
+        <span class="act-lbl" id="favLbl">المفضلة</span>
+      </div>
     </div>
   </div>
 
