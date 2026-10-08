@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+<script>try{if(localStorage.getItem("quran_lang")==="en"){document.documentElement.lang="en";document.documentElement.dir="ltr"}}catch(e){}</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>القرآن الكريم — مشغل صوتي</title>
@@ -72,6 +73,8 @@
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
       </button>
+      <button class="icon-btn kbd-btn" id="kbdBtn" title="اختصارات" aria-label="اختصارات"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button>
+      <button class="icon-btn lang-btn" id="langBtn" title="English" aria-label="English"><span id="langTxt">EN</span></button>
     </div>
   </div>
 </header>
@@ -112,8 +115,11 @@
   </div>
 </div>
 
+<div class="rchips hidden" id="rchips" role="radiogroup" aria-label="القارئ"></div>
+
 <!-- ═══ Content ═══ -->
 <main class="content">
+  <div class="suggest hidden" id="suggest" aria-live="polite"></div>
   <div class="empty" id="empty">
     <div class="empty-icon">
       <svg viewBox="0 0 24 24" fill="none">
@@ -187,6 +193,8 @@
     <div class="player-info">
       <div class="player-num" id="pNum">—</div>
       <div class="player-title" id="pTitle">—</div>
+      <div class="player-sub hidden" id="pSub"></div>
+      <div class="card-meta player-meta" id="pMeta"></div>
     </div>
 
     <!-- شريط التقدم -->
@@ -249,6 +257,11 @@
         <span class="act-lbl">المؤقت</span>
         <div class="pop" id="sleepPop" role="menu" aria-label="مؤقت النوم"></div>
       </div>
+    <div class="act-wrap">
+        <button class="act" id="repBtn" aria-haspopup="menu" aria-expanded="false" aria-label="تكرار السورة"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg><i class="badge-t" id="repBadge"></i></button>
+        <span class="act-lbl">التكرار</span>
+        <div class="pop" id="repPop" role="menu" aria-label="تكرار السورة"></div>
+      </div>
       <div class="act-wrap">
         <button class="act" id="favBtn" aria-pressed="false" aria-label="المفضلة"><svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="m12 2.8 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.6 6.2 20.7l1.1-6.5L2.6 9.6l6.5-.9z"/></svg></button>
         <span class="act-lbl" id="favLbl">المفضلة</span>
@@ -286,6 +299,28 @@
   </div>
 </div>
 
+<div class="sheet hidden" id="kbd" role="dialog" aria-modal="true" aria-label="اختصارات لوحة المفاتيح">
+  <div class="sheet-card">
+    <h2>اختصارات لوحة المفاتيح</h2>
+    <dl>
+      <div><kbd>Space</kbd><span>تشغيل / إيقاف</span></div>
+      <div><kbd>←</kbd><kbd>→</kbd><span>تقديم أو تأخير عشر ثوانٍ</span></div>
+      <div><kbd>↑</kbd><kbd>↓</kbd><span>رفع أو خفض الصوت</span></div>
+      <div><kbd>N</kbd><kbd>P</kbd><span>التالي / السابق</span></div>
+      <div><kbd>M</kbd><span>كتم الصوت</span></div>
+      <div><kbd>S</kbd><span>تشغيل عشوائي</span></div>
+      <div><kbd>R</kbd><span>تكرار السورة</span></div>
+      <div><kbd>F</kbd><span>إضافة إلى المفضلة</span></div>
+      <div><kbd>T</kbd><span>تبديل الوضع الفاتح والداكن</span></div>
+      <div><kbd>L</kbd><span>تبديل اللغة</span></div>
+      <div><kbd>/</kbd><span>البحث</span></div>
+      <div><kbd>?</kbd><span>عرض هذه القائمة</span></div>
+      <div><kbd>Esc</kbd><span>تصغير المشغّل أو إغلاق القوائم</span></div>
+    </dl>
+    <button class="btn-primary" id="kbdClose">إغلاق</button>
+  </div>
+</div>
+<div class="drop hidden" id="drop"><span>أفلت مجلد التلاوات هنا</span></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="js/app.js"></script>
